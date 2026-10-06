@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earn Money - View & Claim</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
+        body { background-color: #f4f7f6; padding: 20px; text-align: center; }
+        .dashboard { max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #333; margin-bottom: 5px; }
+        .limit-status { font-size: 14px; color: #7f8c8d; margin-bottom: 15px; font-weight: bold; }
+        .balance-box { background: #2ecc71; color: white; padding: 15px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 20px; }
+        .btn-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        button { background: #3498db; color: white; border: none; padding: 12px; font-size: 16px; border-radius: 6px; cursor: pointer; transition: 0.3s; width: 100%; font-weight: bold;}
+        button:hover { background: #2980b9; }
+        .btn-withdraw { background: #e67e22; }
+        .btn-withdraw:hover { background: #d35400; }
+        .btn-support { background: #9b59b6; grid-column: span 2; }
+        .btn-support:hover { background: #8e44ad; }
+        
+        /* Task & Timer Section */
+        .video-box { display: none; background: #000; color: white; padding: 40px 20px; border-radius: 8px; margin-top: 20px; position: relative; }
+        .timer-text { font-size: 18px; color: #f1c40f; margin-top: 10px; font-weight: bold; }
+        
+        /* Claim & Captcha System */
+        .claim-box { display: none; background: #fff; border: 2px solid #2ecc71; padding: 15px; border-radius: 8px; margin-top: 15px; color: #333; }
+        .captcha-input { width: 60px; padding: 5px; text-align: center; font-size: 16px; margin: 0 10px; }
+        .btn-claim { background: #2ecc71; margin-top: 10px; }
+        
+        /* Withdraw Modal */
+        .withdraw-box { display: none; background: #eee; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: left; }
+        .withdraw-box select, .withdraw-box input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="dashboard">
+    <h2>ইউজার ড্যাশবোর্ড</h2>
+    <!-- এখানে ইউজারের আজকের কাজের আপডেট দেখাবে -->
+    <div class="limit-status">আজকের কাজ বাকি: <span id="task-left">২০</span> টি</div>
+    
+    <div class="balance-box">আমার ব্যালেন্স: ৳ <span id="user-balance">0.00</span></div>
+
+    <!-- প্রধান বাটনসমূহ -->
+    <div class="btn-container">
+        <button onclick="showTask()">📂 Task Button</button>
+        <button class="btn-withdraw" onclick="showWithdraw()">💳 Withdraw Button</button>
+        <button class="btn-support" onclick="openSupport()">👥 Support Button</button>
+    </div>
+
+    <!-- ১. টাস্ক স্ক্রিন এবং টাইমার -->
+    <div id="video-area" class="video-box">
+        <h3>▶️ স্পনসরড ভিডিও চলছে...</h3>
+        <p style="font-size: 13px; color: #aaa;">(অনুগ্রহ করে স্ক্রিনটি কেটে দেবেন না)</p>
+        <div class="timer-text">⏳ অপেক্ষা করুন: <span id="countdown">10</span> সেকেন্ড</div>
+    </div>
+
+    <!-- ২. ক্যাপচা এবং ক্লেইম অপশন -->
+    <div id="claim-area" class="claim-box">
+        <h4>🤖 হিউম্যান ভেরিফিকেশন (ক্যাপচা)</h4>
+        <p><span id="num1">5</span> + <span id="num2">3</span> = <input type="number" id="captcha-ans" class="captcha-input"></p>
+        <button class="btn-claim" onclick="validateAndClaim()">🎁 Click To Claim Reward</button>
+    </div>
+
+    <!-- ৩. উইথড্র সিস্টেম -->
+    <div id="withdraw-area" class="withdraw-box">
+        <h4>💳 টাকা তোলার রিকোয়েস্ট</h4>
+        <label>পেমেন্ট মেথড সিলেক্ট করুন:</label>
+        <select id="method">
+            <option value="bKash">বিকাশ (bKash)</option>
+            <option value="Nagad">নগদ (Nagad)</option>
+            <option value="Binance">বাইনান্স (Binance Pay ID / USDT)</option>
+        </select>
+        <input type="text" id="acc-num" placeholder="অ্যাকাউন্ট নম্বর / বাইনান্স আইডি দিন">
+        <input type="number" id="amount" placeholder="টাকার পরিমাণ দিন (Min: ৳১০০)">
+        <button style="background: #27ae60;" onclick="submitWithdraw()">Submit Request</button>
+    </div>
+</div>
+
+<script>
+    let balance = 0.00;
+    let timer;
+    let correctAnswer = 0;
+    
+    // আপনার শর্ত অনুযায়ী ডেইলি লিমিট ২০টি সেট করা হলো
+    const dailyLimit = 20; 
+    let completedToday = 0; 
+
+    // টাস্ক বাটন অ্যাকশন
+    function showTask() {
+        // ২০টি টাস্ক শেষ হলে ব্লক করে দেবে
+        if (completedToday >= dailyLimit) {
+            alert("❌ আপনার আজকের ২০টি কাজের লিমিট শেষ! আগামীকাল আবার নতুন টাস্ক পাবেন।");
+            return;
+        }
+
+        document.getElementById('withdraw-area').style.display = 'none';
+        document.getElementById('claim-area').style.display = 'none';
+        
+        let videoArea = document.getElementById('video-area');
+        videoArea.style.display = 'block';
+        
+        let timeLeft = 10; // টেস্ট করার জন্য ১০ সেকেন্ড দেওয়া (লাইভে ৩০/৬০ করতে পারেন)
+        document.getElementById('countdown').innerText = timeLeft;
+
+        clearInterval(timer);
+        timer = setInterval(function() {
+            timeLeft--;
+            document.getElementById('countdown').innerText = timeLeft;
+            
+            if (timeLeft <= 0) {
+                clearInterval(timer);
+                videoArea.style.display = 'none';
+                generateCaptcha(); 
+            }
+        }, 1000);
+    }
+
+    // ক্যাপচা তৈরি
+    function generateCaptcha() {
+        let n1 = Math.floor(Math.random() * 10) + 1;
+        let n2 = Math.floor(Math.random() * 10) + 1;
+        correctAnswer = n1 + n2;
+        
+        document.getElementById('num1').innerText = n1;
+        document.getElementById('num2').innerText = n2;
+        document.getElementById('captcha-ans').value = '';
+        document.getElementById('claim-area').style.display = 'block';
+    }
+
+    // ক্লেইম ভেরিফিকেশন
+    function validateAndClaim() {
+        let userAns = parseInt(document.getElementById('captcha-ans').value);
+        if(userAns === correctAnswer) {
+            balance += 5.00; // প্রতি টাস্কের রিওয়ার্ড (আপনার ইচ্ছামতো বদলাতে পারবেন)
+            completedToday++; // ডেইলি টাস্ক কাউন্ট ১ বাড়ানো হলো
+            
+            // ড্যাশবোর্ডে বাকি থাকা টাস্কের সংখ্যা আপডেট
+            document.getElementById('task-left').innerText = dailyLimit - completedToday;
+            document.getElementById('user-balance').innerText = balance.toFixed(2);
+            
+            alert(`🎉 অভিনন্দন! রিওয়ার্ড ওয়ালেটে যোগ হয়েছে।\nআজকে সম্পন্ন: ${completedToday}/${dailyLimit}`);
+            document.getElementById('claim-area').style.display = 'none';
+        } else {
+            alert("❌ ভুল উত্তর! আবার চেষ্টা করুন।");
+        }
+    }
+
+    // উইথড্র ফাংশন
+    function showWithdraw() {
+        document.getElementById('video-area').style.display = 'none';
+        document.getElementById('claim-area').style.display = 'none';
+        document.getElementById('withdraw-area').style.display = 'block';
+    }
+
+    function submitWithdraw() {
+        let method = document.getElementById('method').value;
+        let account = document.getElementById('acc-num').value;
+        let amount = parseFloat(document.getElementById('amount').value);
+
+        if(!account || !amount) {
+            alert("সবগুলো তথ্য সঠিকভাবে পূরণ করুন।");
+            return;
+        }
+        if(amount > balance) {
+            alert("আপনার অ্যাকাউন্টে পর্যাপ্ত ব্যালেন্স নেই।");
+            return;
+        }
+        if(amount < 100) {
+            alert("সর্বনিম্ন উইথড্র ৳১০০।");
+            return;
+        }
+
+        balance -= amount;
+        document.getElementById('user-balance').innerText = balance.toFixed(2);
+        alert(`পেমেন্ট রিকোয়েস্ট সফল!\nমেথড: ${method}\nঅ্যামাউন্ট: ৳${amount}\n১-২৪ ঘণ্টার মধ্যে টাকা পাঠিয়ে দেওয়া হবে।`);
+        document.getElementById('withdraw-area').style.display = 'none';
+    }
+
+    // সাপোর্ট বাটন (সরাসরি আপনার পার্সোনাল ইনবক্স)
+    function openSupport() {
+        // change_this_to_your_username এর জায়গায় @ ছাড়া আপনার টেলিগ্রাম ইউজারনেম বসান
+        window.open('https://t.me', '_blank'); 
+    }
+</script>
+
+</body>
+</html>
